@@ -1,0 +1,1 @@
+# Bedrock_AgentCore_Shopping_AI_Agent

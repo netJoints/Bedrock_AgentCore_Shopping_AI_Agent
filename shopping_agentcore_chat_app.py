@@ -276,29 +276,64 @@ def chat():
         except json.JSONDecodeError:
             print("DEBUG - Strategy 1 failed: Not valid JSON")
 
-        # Strategy 2: Look for Response: pattern (case-insensitive)
+        # Strategy 2: Look for Response: pattern and extract response array
         if not agent_reply:
             try:
-                print("DEBUG - Strategy 2: Looking for Response: pattern...")
-                # Try various patterns
-                patterns = [
-                    r'Response:\s*({.*})',  # Response: followed by JSON
-                    r'response:\s*({.*})',  # lowercase response
-                    r'"response":\s*(\[.*?\])',  # response field in JSON
-                ]
+                print("DEBUG - Strategy 2: Extracting response array from output...")
                 
-                for pattern in patterns:
-                    match = re.search(pattern, output, re.IGNORECASE | re.DOTALL)
-                    if match:
-                        json_str = match.group(1)
-                        print(f"DEBUG - Found pattern match, attempting to parse...")
-                        response_data = json.loads(json_str)
-                        agent_reply = extract_text_from_response(response_data)
-                        if agent_reply:
-                            print("DEBUG - Strategy 2 successful")
-                            break
+                # Find the response array content using a more targeted approach
+                # Look for the pattern: "response": [ "b'...'" ]
+                response_match = re.search(r'"response":\s*\[\s*"(b\'.*?\')"\s*\]', output, re.DOTALL)
+                
+                if response_match:
+                    response_item = response_match.group(1)
+                    print(f"DEBUG - Found response item, length: {len(response_item)}")
+                    print(f"DEBUG - First 200 chars: {response_item[:200]}")
+                    
+                    # Handle byte string format: b'{...}'
+                    if response_item.startswith("b'") and response_item.endswith("'"):
+                        # Remove b' prefix and trailing '
+                        inner_json_str = response_item[2:-1]
+                        
+                        # The string has escaped characters that need to be unescaped
+                        # Handle escaped quotes first (they appear as \" in the string)
+                        inner_json_str = inner_json_str.replace('\\"', '"')
+                        # Handle escaped single quotes
+                        inner_json_str = inner_json_str.replace("\\'", "'")
+                        # Handle escaped newlines
+                        inner_json_str = inner_json_str.replace('\\n', '\n')
+                        # Handle any remaining escaped backslashes
+                        inner_json_str = inner_json_str.replace('\\\\', '\\')
+                        
+                        print(f"DEBUG - Unescaped JSON (first 200 chars): {inner_json_str[:200]}")
+                        
+                        try:
+                            # Parse the inner JSON
+                            inner_data = json.loads(inner_json_str)
+                            
+                            # Extract text from result.content[0].text
+                            if "result" in inner_data:
+                                result = inner_data["result"]
+                                if "content" in result and isinstance(result["content"], list):
+                                    if len(result["content"]) > 0 and "text" in result["content"][0]:
+                                        agent_reply = result["content"][0]["text"]
+                                        print("DEBUG - Strategy 2 successful - extracted text from response")
+                        except json.JSONDecodeError as je:
+                            print(f"DEBUG - JSON decode error: {je}")
+                            print(f"DEBUG - Attempting direct text extraction...")
+                            
+                            # Direct extraction: Just find the text field
+                            text_match = re.search(r'"text":\s*"([^"]*)"', inner_json_str)
+                            if text_match:
+                                agent_reply = text_match.group(1)
+                                print("DEBUG - Extracted text using direct regex")
+                else:
+                    print("DEBUG - Could not find response array pattern")
+                    
             except Exception as e:
                 print(f"DEBUG - Strategy 2 failed: {e}")
+                import traceback
+                traceback.print_exc()
 
         # Strategy 3: Look for any JSON object in the output
         if not agent_reply:

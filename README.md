@@ -64,3 +64,10 @@ Well-documented
 Mobile-first by design
 
 Try resizing your browser window or opening it on your phone - you'll see it adapts perfectly to any screen size!
+
+Following is the screen shot of it. 
+
+http://127.0.0.1:5000/
+
+<img width="1093" height="640" alt="image" src="https://github.com/user-attachments/assets/69941175-8d8a-4c8a-a7b8-f4f1249af8dc" />
+
